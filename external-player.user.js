@@ -215,6 +215,45 @@ var currentPlayer;
 var translation;
 var iframe;
 
+ // 2. 核心：多视频智能筛选算法
+function getActiveVideo() {
+	const videos = Array.from(document.querySelectorAll("video"));
+	if (videos.length === 0) return null;
+	if (videos.length === 1) return videos[0];
+
+	// 策略一：寻找正在播放（没有暂停、且未播放结束）的视频
+	const playingVideos = videos.filter((v) => !v.paused && !v.ended);
+	if (playingVideos.length > 0) {
+	  // 如果有多个在播放，选择音量最大或尺寸最大的那一个
+	  return playingVideos.reduce((best, current) => {
+	    const bestArea = best.offsetWidth * best.offsetHeight;
+	    const currentArea = current.offsetWidth * current.offsetHeight;
+	    return currentArea > bestArea ? current : best;
+	  });
+	}
+
+	// 策略二：如果没有正在播放的，寻找当前处于屏幕可视区域（看得见）的视频
+	const visibleVideos = videos.filter((v) => {
+	  const rect = v.getBoundingClientRect();
+	  return (
+	    rect.top < window.innerHeight &&
+	    rect.bottom > 0 &&
+	    rect.left < window.innerWidth &&
+	    rect.right > 0
+	  );
+	});
+	if (visibleVideos.length > 0) {
+	  return visibleVideos[0];
+	}
+
+	// 策略三：兜底，返回页面中尺寸最大的 video 标签
+	return videos.reduce((best, current) => {
+	  const bestArea = best.offsetWidth * best.offsetHeight;
+	  const currentArea = current.offsetWidth * current.offsetHeight;
+	  return currentArea > bestArea ? current : best;
+	});
+}
+
 class BaseParser {
     constructor() {
         currentMedia = {
@@ -469,12 +508,11 @@ const PARSER = {
             await this.parseTime();
         }
         async parseVideo() {
-            for (const video of document.getElementsByTagName('video')) {
-                if (await this.check(video.src)) {
-                    currentMedia.video = video.src;
-                    return;
-                }
-            }
+            const video = getActiveVideo();
+		      if (await this.check(video.src)) {
+		        currentMedia.video = video.src;
+		        return;
+		      }
         }
         async check(video) {
             video = video ? video : currentMedia.video;
